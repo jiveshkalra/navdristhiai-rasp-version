@@ -9,8 +9,9 @@
 # 2. Function to image into base64 blob
 # 3. Function to take the audio input of 30 seconds 
 
-# 2nd step: Dealing with server
-# 1. Sending the 30 sec Audio and picture(in blob) to the server 
+# 2nd step: Sending Data to server
+# 1. If Mode == Auto : Only Send Image in blob to '/process_image'
+# 2. Else :  Sending the 30 sec Audio and picture(in blob) to the server 
 # 2. Getting the response from the server 
 
 # 3rd step: Output
@@ -24,7 +25,7 @@ import requests
 import base64 
 import os
 import time
-# from picamera import PiCamera 
+# from picamera import PiCamera  
 from gtts import gTTS
 import cv2
 from playsound import playsound
@@ -32,7 +33,7 @@ import pyaudio
 import wave 
 # Setting up Server URL
 serverURL = "https://herring-notable-physically.ngrok-free.app/"
-mode = "question"
+mode = "auto"
 #  camera = PiCamera() # for pi
 
 # Step 1: Inputs
@@ -48,15 +49,18 @@ def takePicture():
     
     cam = cv2.VideoCapture(0)
     result, image = cam.read()
-    cv2.imwrite("img.png", image) 
+    filename = "img.png"
+    cv2.imwrite(filename, image) 
     print("Picture taken")
     cam.release()
- 
-#  Function to image into base64 blob
-def imageToBlob():
-    with open("img.png", "rb") as img_file:
-        my_string = base64.b64encode(img_file.read())
-        return my_string
+    return filename 
+
+def imageToBlob(image_path):  
+    with open(image_path, "rb") as image_file:
+        encoded_string = base64.b64encode(image_file.read())
+    output =  encoded_string.decode('utf-8')
+    print(output[:100])
+    return output
 
 # Function to take the audio input of 30 seconds
 def takeAudio():
@@ -102,22 +106,26 @@ def takeAudio():
     wf.writeframes(b''.join(frames))
     wf.close() 
  
-
-# Step 2: Dealing with server
-# Sending the 30 sec Audio and picture(in blob) to the server
-def sendToServer(audio, image):
-    data = {
-        "audio": audio,
-        "image": image,
-        "mode": mode
-    }
-    response = requests.post(serverURL, json = data)
+# Step 2: Sending Data to server
+# If Mode == Auto : Only Send Image in blob to '/process_image'
+def sendImageToServer(imageBlob): 
+    response = requests.post(serverURL + "process_image", data={"image": imageBlob})
+    print(response.json())
     return response.json()
 
+# Else :  Sending the 30 sec Audio and picture(in blob) to the server
+def sendAudioAndImageToServer(imageBlob): 
+    with open("output.wav", "rb") as audioBlob:
+        response = requests.post(serverURL + "audio-processing", files={"audioBlob": audioBlob}, data={"image": imageBlob, "mode": mode})
+        print(response.json())
+    return response.json()
 # Getting the response from the server
-def getResponse():
-    response = sendToServer(takeAudio(), imageToBlob())
-    return response
+def getResponse(imageBlob):
+    if mode == "auto":
+        return sendImageToServer(imageBlob)
+    else:
+        takeAudio() 
+        return sendAudioAndImageToServer(imageBlob)
 
 # Step 3: Output
 # Converting the response to speech (via gTTS)
@@ -135,7 +143,10 @@ def playResponse(path):
 
 # Main Function
 def main():
-    takePicture()
-    response = getResponse()
+    imgBlob = imageToBlob(takePicture())
+    response = getResponse(imgBlob)
     convertToSpeech(response)
     playResponse("response.mp3")
+
+if __name__ == "__main__":
+    main()
