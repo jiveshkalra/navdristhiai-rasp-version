@@ -27,10 +27,11 @@ import base64
 import os
 import time
 # from picamera import PiCamera 
+from gtts import gTTS
 import cv2
+from playsound import playsound
 import pyaudio
-import wave
-
+import wave 
 # Setting up Server URL
 serverURL = "https://herring-notable-physically.ngrok-free.app/"
 mode = "question"
@@ -67,7 +68,7 @@ def takeAudio():
 
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
-    CHANNELS = 2
+    CHANNELS = 1
     RATE = 44100
     RECORD_SECONDS = 5
     WAVE_OUTPUT_FILENAME = "output.wav"
@@ -99,6 +100,42 @@ def takeAudio():
     wf.setsampwidth(p.get_sample_size(FORMAT))
     wf.setframerate(RATE)
     wf.writeframes(b''.join(frames))
-    wf.close()
-    print("Audio Recorded")
+    wf.close() 
+ 
 
+# Step 2: Dealing with server
+# Sending the 30 sec Audio and picture(in blob) to the server
+def sendToServer(audio, image):
+    data = {
+        "audio": audio,
+        "image": image,
+        "mode": mode
+    }
+    response = requests.post(serverURL, json = data)
+    return response.json()
+
+# Getting the response from the server
+def getResponse():
+    response = sendToServer(takeAudio(), imageToBlob())
+    return response
+
+# Step 3: Output
+# Converting the response to speech (via gTTS)
+def convertToSpeech(response):
+    # Pi Method? 
+    # os.system("gtts-cli " + response + " --output response.mp3")
+    # os.system("mpg321 response.mp3")
+    # Windows Method
+    tts = gTTS(text=response, lang='en')
+    tts.save("response.mp3")
+
+# Playing the response to the user through speakers
+def playResponse(path): 
+    playsound(path)
+
+# Main Function
+def main():
+    takePicture()
+    response = getResponse()
+    convertToSpeech(response)
+    playResponse("response.mp3")
