@@ -33,7 +33,7 @@ import pyaudio
 import wave 
 # Setting up Server URL
 serverURL = "https://herring-notable-physically.ngrok-free.app/"
-mode = "auto"
+mode = "ue"
 #  camera = PiCamera() # for pi
 
 # Step 1: Inputs
@@ -55,11 +55,11 @@ def takePicture():
     cam.release()
     return filename 
 
+
 def imageToBlob(image_path):  
     with open(image_path, "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read())
-    output =  encoded_string.decode('utf-8')
-    print(output[:100])
+    output =  encoded_string.decode('utf-8') 
     return output
 
 # Function to take the audio input of 30 seconds
@@ -110,15 +110,15 @@ def takeAudio():
 # If Mode == Auto : Only Send Image in blob to '/process_image'
 def sendImageToServer(imageBlob): 
     response = requests.post(serverURL + "process_image", data={"image": imageBlob})
-    print(response.json())
-    return response.json()
+    print(response.json()['to_play'])
+    return response.json()['to_play']
 
 # Else :  Sending the 30 sec Audio and picture(in blob) to the server
 def sendAudioAndImageToServer(imageBlob): 
     with open("output.wav", "rb") as audioBlob:
         response = requests.post(serverURL + "audio-processing", files={"audioBlob": audioBlob}, data={"image": imageBlob, "mode": mode})
-        print(response.json())
-    return response.json()
+        print(response.json()['to_play'])
+    return response.json()['to_play']
 # Getting the response from the server
 def getResponse(imageBlob):
     if mode == "auto":

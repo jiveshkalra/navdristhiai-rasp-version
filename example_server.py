@@ -32,17 +32,16 @@ def upload_audio():
     f.write(audio_blob.read())
   return jsonify({ "to_play":to_play,"mode":mode })
  
-def download_image(image_data):
-  image_format = image_data.split(';')[0].split('/')[1]
-  decoded_data = base64.b64decode(image_data.split(',')[1])
-  time_rn = datetime.datetime.now().strftime("%f")
 
-  filename = f'{time_rn}.{image_format}'
-  image_path = os.path.join(UPLOAD_FOLDER, filename)
+def download_image(image_data): 
+    time_rn = datetime.datetime.now().strftime("%f")
 
-  with open(image_path, 'wb') as f:
-      f.write(decoded_data)
-  return image_path
+    filename = f'{time_rn}.png'
+    image_path = os.path.join(UPLOAD_FOLDER, filename)
+
+    with open(image_path, "wb") as file:
+        file.write(base64.b64decode(image_data))
+    return image_path 
 
 @app.route('/process_image', methods=['POST']) 
 def process_image_api():
