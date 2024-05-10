@@ -1,5 +1,7 @@
 import requests
 import base64 
+from gtts import gTTS
+import playsound
 
 serverURL = "https://herring-notable-physically.ngrok-free.app/"
 mode = "question"
@@ -17,3 +19,9 @@ def analyze_image(file_path = "img.png",mode=mode):
     data = response.json() 
     return data.to_play
 
+def tts(text=""):
+    tts = gTTS(text)
+    tts.save('hello.mp3')
+    playsound.playsound('hello.mp3')
+
+tts('greetings!!!, welcome to navdroshtiAI, emowering blind through AI')
