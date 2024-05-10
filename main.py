@@ -17,9 +17,7 @@
 # 1. Converting the response to speech (via gTTS)
 # 2. Playing the response to the user through speakers
 
-
-
-
+ 
 
 # Importing Libraries
 import requests
@@ -63,7 +61,9 @@ def imageToBlob():
 # Function to take the audio input of 30 seconds
 def takeAudio():
     # Raspiberry method
+
     # os.system("arecord -D plughw:1,0 -f cd -c1 -r 48000 -d 30 -t wav audio.wav")
+
     # Windows method 
 
     CHUNK = 1024
