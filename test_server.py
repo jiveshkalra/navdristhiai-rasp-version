@@ -16,7 +16,7 @@ app = Flask(__name__)
 @app.route('/upload_image', methods=['POST'])
 def upload_image():
     image = request.files['image']
-    image.save(f'pics/{image.filename}')
+    image.save(f'uploads/{image.filename}')
     return jsonify({'message': 'Image uploaded successfully'})
 def start_ngrok(port):
     subprocess.Popen(['ngrok', 'http', f'--domain=herring-notable-physically.ngrok-free.app' ,str(port)])
