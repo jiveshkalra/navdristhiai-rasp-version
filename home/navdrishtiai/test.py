@@ -18,8 +18,100 @@ import re
 
 # Function definitions
 
+
+## Image Functions
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+def take_pic():
+    timestamp = int(time.time())
+    image_path = f'pics/{str(timestamp)}.jpg'
+    picam2.capture_file(f'pics/{str(timestamp)}.jpg')
+    
+    # Rotate the captured image by 180°
+    with Image.open(image_path) as img:
+        rotated_image = img.rotate(180)
+        rotated_image.save(image_path)
+
+    return image_path 
+
+## AI Functions
+
+# VLM
+def call_groq_vlm(image_path, query, client):
+    base64_image = encode_image(image_path)
+    completion = client.chat.completions.create(
+        model="llama-3.2-11b-vision-preview",
+        messages=[
+            {"role": "assistant", "content": "Hi I am NavDrishtiAI, your personal visual image assistant , you can provide me image of your surroundings and I will give you concise descriptions or answer your questions based on that image."},
+            {"role": "user", "content": [
+                {"type": "text",
+                 "text": f"Hi NavDrishtiAI, I have attached an image of what is in front of me, based on this image answer the following question: {query}. keep it short , simple and concise(under 200 letters), talk straight to point and avoid any unnecessary details and always be willing to help me with any other questions I may have."},
+                {"type": "image_url", 
+                 "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]},
+            {"role": "assistant", "content": "Sure I'll be glad to help in anyway I can. Based on the image provided here is a brief answer to your query, "}
+        ],
+        temperature=1,
+        max_tokens=125,
+        top_p=1,
+        stream=False,
+        stop=None,
+    )
+    return completion.choices[0].message.content
+
+# Speech To Text
+def run_whisper(filename):
+    with open(filename, "rb") as file:
+        transcription = client.audio.transcriptions.create(
+            file=(filename, file.read()),
+            model="whisper-large-v3-turbo",
+            response_format="json",
+            language="en",
+            temperature=0.0
+        )
+        return transcription.text
+
+# TTS
+def fetch_tts_audio(text, filename, to_download=False):
+    url = "https://text-to-speech-ai-tts-api.p.rapidapi.com/"
+    querystring = {
+        "text": text,
+        "language": "en-IN",
+        "voice": "en-IN-NeerjaNeural"
+    }
+    headers = { 
+        "x-rapidapi-key": "003d07f7a3msh14a688b8db48422p1d893cjsne4055fd63ac2", ## Jivesh 4 API KEY
+        #"x-rapidapi-key": "df51034d02msh737ed9ba2028b79p146d5ajsn90b7c1651d8c", ## Jivesh 9 API KEY 
+
+        "x-rapidapi-host": "text-to-speech-ai-tts-api.p.rapidapi.com"
+    }
+    response = requests.get(url, headers=headers, params=querystring)
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("error") == "false":
+            download_url = data.get("download_url")
+            if to_download:
+                audio_response = requests.get(download_url)
+                with open(filename, 'wb') as audio_file:
+                    audio_file.write(audio_response.content)
+                print(
+                    f"TTS audio for '{text}' downloaded successfully as {filename}.")
+                return filename
+            else:
+                return download_url
+        else:
+            print("Error in TTS generation:", data.get("message"))
+            return None
+    else:
+        print("TTS API request failed with status:", response.status_code)
+        return None
+
+## Audio Functions
+
+# Continuous Audio Recorder
 class ContinuousAudioRecorder:
-    def __init__(self, channels=2, rate=44100, chunk=1024, sample_format=pyaudio.paInt16):
+    def __init__(self, channels=2, rate=22050, chunk=1024, sample_format=pyaudio.paInt16):
         self.channels = channels
         self.rate = rate
         self.chunk = chunk
@@ -67,6 +159,7 @@ class ContinuousAudioRecorder:
         self.p.terminate()
         print("Audio recorder closed.")
 
+# Audio From URL Player
 class PersistentAudioURLPlayer:
     def __init__(self, rate=22050, channels=1):
         self.audio = pyaudio.PyAudio()
@@ -99,7 +192,9 @@ class PersistentAudioURLPlayer:
         self.stream.close()
         self.audio.terminate()
 
+# Audio File Player
 class PersistentAudioFILEPlayer:
+
     def __init__(self):
         self.audio = pyaudio.PyAudio()
         self.stream = None
@@ -143,7 +238,9 @@ def decode_audio_with_ffmpeg(input_data):
     pcm_data, _ = process.communicate(input_data)
     return pcm_data
 
+# Stream and Play Audio
 def stream_and_play_audio_optimized(url, player):
+
     chunk_size = 6 * 1024  # Smaller chunks for low bandwidth
 
     def download_audio():
@@ -168,142 +265,27 @@ def stream_and_play_audio_optimized(url, player):
     download_thread.start()
     download_thread.join()
 
-
-def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode('utf-8')
-
-
-def take_pic():
-    timestamp = int(time.time())
-    image_path = f'pics/{str(timestamp)}.jpg'
-    picam2.capture_file(f'pics/{str(timestamp)}.jpg')
+# Playing/ caching small audio files
+def play_small_audio_async(audio_file_player, file_path, tts_text):
+    """
+    Plays audio asynchronously. If the audio file does not exist, it generates it using TTS.
     
-    # Rotate the captured image by 180°
-    with Image.open(image_path) as img:
-        rotated_image = img.rotate(180)
-        rotated_image.save(image_path)
-
-    return image_path 
-
-
-def call_groq_vlm(image_path, query, client):
-    base64_image = encode_image(image_path)
-    completion = client.chat.completions.create(
-        model="llama-3.2-11b-vision-preview",
-        messages=[
-            {"role": "assistant", "content": "Hi I am NavDrishtiAI, your personal visual image assistant , you can provide me image of your surroundings and I will give you concise descriptions or answer your questions based on that image."},
-            {"role": "user", "content": [
-                {"type": "text",
-                 "text": f"Hi NavDrishtiAI, I have attached an image of what is in front of me, based on this image answer the following question: {query}. keep it short , simple and concise(under 200 letters), talk straight to point and avoid any unnecessary details and always be willing to help me with any other questions I may have."},
-                {"type": "image_url", 
-                 "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]},
-            {"role": "assistant", "content": "Sure I'll be glad to help in anyway I can. Based on the image provided here is a brief answer to your query, "}
-        ],
-        temperature=1,
-        max_tokens=125,
-        top_p=1,
-        stream=False,
-        stop=None,
-    )
-    return completion.choices[0].message.content
-
+    Args:
+        audio_file_player: The audio playback object.
+        file_path (str): The file path to check or store the audio file.
+        tts_text (str): The text to synthesize into speech if the file does not exist.
+    """
+    def play():
+        if not os.path.exists(file_path):
+            print(f"{file_path} does not exist, generating TTS audio.")
+            fetch_tts_audio(tts_text, file_path, to_download=True)
+        else:
+            print(f"{file_path} already exists.")
+        audio_file_player.play_audio(file_path)
+    threading.Thread(target=play, daemon=True).start()
  
-# Function to ensure an intro message file exists and plays it
 
-
-# Function to ensure a listening message file exists
-
-
-def play_intro_async(audio_file_player):
-    def play():
-        intro_file = "intro.mp3"
-        if not os.path.exists(intro_file):
-            print("Intro file does not exist, generating TTS audio.")
-            intro_text = "Hi, I am NavDrishtiAI, here to assist you with all your visual needs!"
-            fetch_tts_audio(intro_text, intro_file, to_download=True)
-        else:
-            print("Intro file already exists.")
-        audio_file_player.play_audio(intro_file)
-    threading.Thread(target=play, daemon=True).start()
-
-def play_listening_async(audio_file_player):
-    def play():
-        listening_file = "listening.mp3"
-        if not os.path.exists(listening_file):
-            print("Listening file does not exist, generating TTS audio.")
-            listening_text = "Listening..."
-            fetch_tts_audio(listening_text, listening_file, to_download=True)
-        audio_file_player.play_audio(listening_file)
-
-    threading.Thread(target=play, daemon=True).start()
-
-def play_processing_async(audio_file_player):
-    def play():
-        processing_file = "processing.mp3"
-        if not os.path.exists(processing_file):
-            print("Processing file does not exist, generating TTS audio.")
-            processing_text = "Processing..."
-            fetch_tts_audio(processing_text, processing_file, to_download=True)
-        audio_file_player.play_audio(processing_file)
-
-    threading.Thread(target=play, daemon=True).start()
-
-def play_unable_to_answer(audio_file_player):
-    unable_to_answer_file = "unable_to_answer.mp3"
-    if not os.path.exists(unable_to_answer_file):
-        print("Unable to answer file does not exist, generating TTS audio.")
-        unable_to_answer_text = "I am sorry but I am unable to answer your question at the moment. Please try again later."
-        fetch_tts_audio(unable_to_answer_text, unable_to_answer_file, to_download=True)
-    audio_file_player.play_audio(unable_to_answer_file)
-
-def run_whisper(filename):
-    with open(filename, "rb") as file:
-        transcription = client.audio.transcriptions.create(
-            file=(filename, file.read()),
-            model="whisper-large-v3-turbo",
-            response_format="json",
-            language="en",
-            temperature=0.0
-        )
-        return transcription.text
-
-# TTS function to fetch audio from RapidAPI
-def fetch_tts_audio(text, filename, to_download=False):
-    url = "https://text-to-speech-ai-tts-api.p.rapidapi.com/"
-    querystring = {
-        "text": text,
-        "language": "en-IN",
-        "voice": "en-IN-NeerjaNeural"
-    }
-    headers = { 
-        "x-rapidapi-key": "003d07f7a3msh14a688b8db48422p1d893cjsne4055fd63ac2", ## Jivesh 4 API KEY
-        #"x-rapidapi-key": "df51034d02msh737ed9ba2028b79p146d5ajsn90b7c1651d8c", ## Jivesh 9 API KEY 
-
-        "x-rapidapi-host": "text-to-speech-ai-tts-api.p.rapidapi.com"
-    }
-    response = requests.get(url, headers=headers, params=querystring)
-    if response.status_code == 200:
-        data = response.json()
-        if data.get("error") == "false":
-            download_url = data.get("download_url")
-            if to_download:
-                audio_response = requests.get(download_url)
-                with open(filename, 'wb') as audio_file:
-                    audio_file.write(audio_response.content)
-                print(
-                    f"TTS audio for '{text}' downloaded successfully as {filename}.")
-                return filename
-            else:
-                return download_url
-        else:
-            print("Error in TTS generation:", data.get("message"))
-            return None
-    else:
-        print("TTS API request failed with status:", response.status_code)
-        return None
-
-
+## Misc.
 def preprocess_text_for_tts(text):
     # Remove non-ASCII characters and limit length
     # Removes non-ASCII characters
@@ -316,11 +298,13 @@ def preprocess_text_for_tts(text):
     return clean_text[:1000]  # Limits to 200 characters for API compatibility
 
 
+# Main function
 def do_complete_run(client,recorder,audio_url_player,audio_file_player):
     # Record start time for the entire process
     total_start_time = time.time() 
     # Step 1: Record audio continuously
-    play_listening_async(audio_file_player)
+    
+    play_small_audio_async(audio_file_player, "listening.mp3", "Listening...")
     start_time = time.time()
     audio_file = recorder.record_audio_continuous()
     end_time = time.time()
@@ -332,7 +316,7 @@ def do_complete_run(client,recorder,audio_url_player,audio_file_player):
     end_time = time.time()
     print(f"Image saved at {image_path} in {end_time - start_time:.2f} seconds.")
     
-    play_processing_async(audio_file_player)
+    play_small_audio_async(audio_file_player, "processing.mp3", "Processing...")
 
     # Step 3: Run Whisper for transcription
     start_time = time.time()
@@ -366,7 +350,7 @@ def do_complete_run(client,recorder,audio_url_player,audio_file_player):
         end_time = time.time()
         print(f"TTS audio played in {end_time - start_time:.2f} seconds.")
     else:
-        play_unable_to_answer()
+        play_small_audio_async(audio_file_player, "unable_to_answer.mp3", "I am sorry but I am unable to answer your question at the moment. Please try again later.")
         print("Failed to fetch or play TTS audio.")
 
     end_time = time.time()
@@ -389,7 +373,8 @@ def do_complete_run(client,recorder,audio_url_player,audio_file_player):
 # Main loop
 try: 
     audio_file_player = PersistentAudioFILEPlayer()
-    play_intro_async(audio_file_player) 
+    play_small_audio_async(audio_file_player, "intro.mp3", "Hi, I am NavDrishtiAI, here to assist you with all your visual needs!")
+
 
     # Set up GPIO
     GPIO.setmode(GPIO.BCM)
