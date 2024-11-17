@@ -1,0 +1,81 @@
+import requests
+import subprocess
+import time
+from threading import Thread
+from queue import Queue
+import pyaudio
+
+class PersistentAudioPlayer:
+    def __init__(self, rate=22050, channels=1):
+        self.audio = pyaudio.PyAudio()
+        self.stream = self.audio.open(
+            format=pyaudio.paInt16,
+            channels=channels,
+            rate=rate,
+            output=True,
+        )
+        self.buffer = Queue(maxsize=4)  # Allow buffering of multiple chunks
+        self.is_playing = True
+        self.play_thread = Thread(target=self._play_audio)
+        self.play_thread.start()
+
+    def _play_audio(self):
+        while self.is_playing or not self.buffer.empty():
+            if not self.buffer.empty():
+                chunk = self.buffer.get()
+                self.stream.write(chunk)
+            else:
+                time.sleep(0.025)  # Avoid busy-waiting
+
+    def write(self, chunk):
+        self.buffer.put(chunk)
+
+    def close(self):
+        self.is_playing = False
+        self.play_thread.join()
+        self.stream.stop_stream()
+        self.stream.close()
+        self.audio.terminate()
+
+def decode_audio_with_ffmpeg(input_data):
+    process = subprocess.Popen(
+        ['ffmpeg', '-i', 'pipe:0', '-f', 's16le', '-ar', '22050', '-ac', '1', 'pipe:1'],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL
+    )
+    pcm_data, _ = process.communicate(input_data)
+    return pcm_data
+
+def stream_and_play_audio_optimized(url, player):
+    chunk_size = 6 * 1024  # Smaller chunks for low bandwidth
+
+    def download_audio():
+        response = requests.get(url, stream=True)
+        audio_buffer = b""
+
+        for chunk in response.iter_content(chunk_size=chunk_size):
+            if chunk:
+                audio_buffer += chunk
+
+                if len(audio_buffer) > chunk_size * 4:  # Buffer 2 chunks before decoding
+                    pcm_data = decode_audio_with_ffmpeg(audio_buffer)
+                    player.write(pcm_data)
+                    audio_buffer = b""
+
+        # Decode and play remaining data
+        if audio_buffer:
+            pcm_data = decode_audio_with_ffmpeg(audio_buffer)
+            player.write(pcm_data)
+
+    download_thread = Thread(target=download_audio)
+    download_thread.start()
+    download_thread.join()
+
+# Usage example:
+audio_player = PersistentAudioPlayer()
+
+try:
+    stream_and_play_audio_optimized("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", audio_player)
+finally:
+    audio_player.close()
