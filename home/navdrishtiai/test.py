@@ -10,12 +10,12 @@ import subprocess
 import threading
 import requests
 import pyaudio
-import pygame
 import base64
 import time
 import wave
 import os
 import re
+
 # Function definitions
 
 
@@ -158,31 +158,6 @@ class ContinuousAudioRecorder:
         self.stream.close()
         self.p.terminate()
         print("Audio recorder closed.")
-class PersistentAudioFilePlayer:
-    def __init__(self):
-        pygame.mixer.init()
-        self.lock = threading.Lock()
-        print("Audio player initialized with pygame.mixer.")
-
-    def play_audio(self, audio_path):
-        """Plays the specified audio file (MP3/WAV) using pygame.mixer."""
-        with self.lock:
-            if not os.path.exists(audio_path):
-                raise FileNotFoundError(f"Audio file not found: {audio_path}")
-            
-            print(f"Playing audio: {audio_path}")
-            pygame.mixer.music.load(audio_path)
-            pygame.mixer.music.play()
-
-            # Wait for the audio to finish playing
-            while pygame.mixer.music.get_busy():
-                continue  # Keeps the thread alive while music is playing
-
-    def close(self):
-        """Stops any ongoing playback and shuts down the audio system."""
-        pygame.mixer.music.stop()
-        pygame.mixer.quit()
-        print("Audio player terminated.")
 
 # Audio From URL Player
 class PersistentAudioURLPlayer:
@@ -216,9 +191,7 @@ class PersistentAudioURLPlayer:
         self.stream.stop_stream()
         self.stream.close()
         self.audio.terminate()
-
-# Audio File Player
-
+  
 def decode_audio_with_ffmpeg(input_data):
     process = subprocess.Popen(
         ['ffmpeg', '-i', 'pipe:0', '-f', 's16le', '-ar', '22050', '-ac', '1', 'pipe:1'],
@@ -230,8 +203,7 @@ def decode_audio_with_ffmpeg(input_data):
     return pcm_data
 
 # Stream and Play Audio
-def stream_and_play_audio_optimized(url, player):
-
+def stream_and_play_audio_optimized(url, player): 
     chunk_size = 6 * 1024  # Smaller chunks for low bandwidth
 
     def download_audio():
@@ -274,8 +246,13 @@ def play_small_audio_async(audio_file_player, file_path, tts_text):
             print(f"{file_path} already exists.")
         audio_file_player.play_audio(file_path)
     threading.Thread(target=play, daemon=True).start()
- 
 
+class PersistentAudioFILEPlayer:
+    def __init__(self):
+        pass
+    def play_audio(self, file_path):
+        subprocess.run(['paplay', file_path])
+         
 ## Misc.
 def preprocess_text_for_tts(text):
     # Remove non-ASCII characters and limit length
@@ -287,6 +264,7 @@ def preprocess_text_for_tts(text):
     # Removes non-ASCII characters
     clean_text = clean_text.replace("°", " degrees")
     return clean_text[:1000]  # Limits to 200 characters for API compatibility
+
 
 
 # Main function
@@ -389,6 +367,6 @@ try:
             do_complete_run(client,recorder,audio_url_player,audio_file_player,input_pin)
         time.sleep(0.5)  # Small delay to reduce CPU usage
 finally:
-    audio_url_player.close() 
+    audio_url_player.close()
     recorder.close()
     GPIO.cleanup()
