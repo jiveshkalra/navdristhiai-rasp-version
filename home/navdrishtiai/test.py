@@ -83,6 +83,7 @@ def fetch_tts_audio(text, filename, to_download=False):
     headers = { 
         "x-rapidapi-key": "003d07f7a3msh14a688b8db48422p1d893cjsne4055fd63ac2", ## Jivesh 4 API KEY
         #"x-rapidapi-key": "df51034d02msh737ed9ba2028b79p146d5ajsn90b7c1651d8c", ## Jivesh 9 API KEY 
+        #"x-rapidapi-key": "f00308b42cmsh53ef42b40385409p19097ejsn06a3a5fdd395", ## Priyanshu API KEY pic
 
         "x-rapidapi-host": "text-to-speech-ai-tts-api.p.rapidapi.com"
     }
