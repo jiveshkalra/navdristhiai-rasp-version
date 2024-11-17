@@ -10,12 +10,12 @@ import subprocess
 import threading
 import requests
 import pyaudio
+import pygame
 import base64
 import time
 import wave
 import os
 import re
-
 # Function definitions
 
 
@@ -127,7 +127,7 @@ class ContinuousAudioRecorder:
         )
         print("Audio recorder initialized.")
 
-    def record_audio_continuous(self, input_pin, filename="output.wav", post_record_buffer=1.5):
+    def record_audio_continuous(self, input_pin=4, filename="output.wav", post_record_buffer=1.5):
         frames = []
         print("Recording...")
 
@@ -158,6 +158,31 @@ class ContinuousAudioRecorder:
         self.stream.close()
         self.p.terminate()
         print("Audio recorder closed.")
+class PersistentAudioFilePlayer:
+    def __init__(self):
+        pygame.mixer.init()
+        self.lock = threading.Lock()
+        print("Audio player initialized with pygame.mixer.")
+
+    def play_audio(self, audio_path):
+        """Plays the specified audio file (MP3/WAV) using pygame.mixer."""
+        with self.lock:
+            if not os.path.exists(audio_path):
+                raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            
+            print(f"Playing audio: {audio_path}")
+            pygame.mixer.music.load(audio_path)
+            pygame.mixer.music.play()
+
+            # Wait for the audio to finish playing
+            while pygame.mixer.music.get_busy():
+                continue  # Keeps the thread alive while music is playing
+
+    def close(self):
+        """Stops any ongoing playback and shuts down the audio system."""
+        pygame.mixer.music.stop()
+        pygame.mixer.quit()
+        print("Audio player terminated.")
 
 # Audio From URL Player
 class PersistentAudioURLPlayer:
@@ -193,40 +218,6 @@ class PersistentAudioURLPlayer:
         self.audio.terminate()
 
 # Audio File Player
-class PersistentAudioFILEPlayer:
-
-    def __init__(self):
-        self.audio = pyaudio.PyAudio()
-        self.stream = None
-        print("Audio player initialized.")
-
-    def play_audio(self, audio_path):
-        # Open the audio file
-        with wave.open(audio_path, 'rb') as wf:
-            if not self.stream:
-                # Initialize the audio stream if not already open
-                self.stream = self.audio.open(
-                    format=self.audio.get_format_from_width(wf.getsampwidth()),
-                    channels=wf.getnchannels(),
-                    rate=wf.getframerate(),
-                    output=True,
-                )
-
-            print(f"Playing audio: {audio_path}")
-            # Read and play audio data in chunks
-            chunk = 1024
-            data = wf.readframes(chunk)
-            while data:
-                self.stream.write(data)
-                data = wf.readframes(chunk)
-
-    def close(self):
-        if self.stream:
-            self.stream.stop_stream()
-            self.stream.close()
-            print("Audio stream closed.")
-        self.audio.terminate()
-        print("Audio player terminated.")
 
 def decode_audio_with_ffmpeg(input_data):
     process = subprocess.Popen(
@@ -299,14 +290,14 @@ def preprocess_text_for_tts(text):
 
 
 # Main function
-def do_complete_run(client,recorder,audio_url_player,audio_file_player):
+def do_complete_run(client,recorder,audio_url_player,audio_file_player,input_pin):
     # Record start time for the entire process
     total_start_time = time.time() 
     # Step 1: Record audio continuously
     
     play_small_audio_async(audio_file_player, "listening.mp3", "Listening...")
     start_time = time.time()
-    audio_file = recorder.record_audio_continuous()
+    audio_file = recorder.record_audio_continuous(input_pin)
     end_time = time.time()
     print(f"Audio recorded in {end_time - start_time:.2f} seconds.")
 
@@ -395,9 +386,9 @@ try:
     while True:
         if GPIO.input(input_pin) == GPIO.HIGH:
 
-            do_complete_run(client,recorder,audio_url_player,audio_file_player)
+            do_complete_run(client,recorder,audio_url_player,audio_file_player,input_pin)
         time.sleep(0.5)  # Small delay to reduce CPU usage
 finally:
-    audio_url_player.close()
+    audio_url_player.close() 
     recorder.close()
     GPIO.cleanup()
