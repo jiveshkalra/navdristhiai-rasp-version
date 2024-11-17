@@ -44,10 +44,10 @@ def call_groq_vlm(image_path, query, client):
     completion = client.chat.completions.create(
         model="llama-3.2-11b-vision-preview",
         messages=[
-            {"role": "assistant", "content": "Hi I am NavDrishtiAI, your personal visual image assistant , you can provide me image of your surroundings and I will give you concise descriptions or answer your questions based on that image."},
+            {"role": "assistant", "content": "Hi I am NavDrishtiAI, a personal visual assistant for visually impaired . My mission is to help out all the visually impaired people by providing them clear and concise descriptions of their surroundings and being a new eye for them, I can also answer any specific question they have about the image in front of them. Please feel free to ask me anything."},
             {"role": "user", "content": [
                 {"type": "text",
-                 "text": f"Hi NavDrishtiAI, I have attached an image of what is in front of me, based on this image answer the following question: {query}. keep it short , simple and concise(under 200 letters), talk straight to point and avoid any unnecessary details and always be willing to help me with any other questions I may have."},
+                 "text": f"Hi NavDrishtiAI, I have attached an image of what is in front of me, based on this image answer the following question: {query}. keep it short , simple and concise(under 200 letters), talk straight to point and avoid any unnecessary details and always be willing to help me with any other questions I may have. Only If You Asked for Introduction then, introduce yourself as NavDrishtiAI, the personal visual assistant for visually impaired and share your mission(only if needed)."},
                 {"type": "image_url", 
                  "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]},
             {"role": "assistant", "content": "Sure I'll be glad to help in anyway I can. Based on the image provided here is a brief answer to your query, "}
@@ -81,11 +81,11 @@ def fetch_tts_audio(text, filename, to_download=False):
         "voice": "en-IN-NeerjaNeural"
     }
     headers = { 
-        "x-rapidapi-key": "003d07f7a3msh14a688b8db48422p1d893cjsne4055fd63ac2", ## Jivesh 4 API KEY
+        #"x-rapidapi-key": "003d07f7a3msh14a688b8db48422p1d893cjsne4055fd63ac2", ## Jivesh 4 API KEY
         #"x-rapidapi-key": "df51034d02msh737ed9ba2028b79p146d5ajsn90b7c1651d8c", ## Jivesh 9 API KEY 
-        #"x-rapidapi-key": "f00308b42cmsh53ef42b40385409p19097ejsn06a3a5fdd395", ## Priyanshu API KEY pic
+	    "x-rapidapi-key": "f00308b42cmsh53ef42b40385409p19097ejsn06a3a5fdd395", ## Priyanshu API KEY
+	    "x-rapidapi-host": "text-to-speech-ai-tts-api.p.rapidapi.com"
 
-        "x-rapidapi-host": "text-to-speech-ai-tts-api.p.rapidapi.com"
     }
     response = requests.get(url, headers=headers, params=querystring)
     if response.status_code == 200:
@@ -94,6 +94,9 @@ def fetch_tts_audio(text, filename, to_download=False):
             download_url = data.get("download_url")
             if to_download:
                 audio_response = requests.get(download_url)
+                # print the headers onto the console
+                print(audio_response.headers)
+                
                 with open(filename, 'wb') as audio_file:
                     audio_file.write(audio_response.content)
                 print(
@@ -110,7 +113,8 @@ def fetch_tts_audio(text, filename, to_download=False):
 
 ## Audio Functions
 
-# Continuous Audio Recorder
+# Continuous Audio Recorder 
+
 class ContinuousAudioRecorder:
     def __init__(self, channels=2, rate=22050, chunk=1024, sample_format=pyaudio.paInt16):
         self.channels = channels
@@ -119,46 +123,73 @@ class ContinuousAudioRecorder:
         self.sample_format = sample_format
 
         self.p = pyaudio.PyAudio()
-        self.stream = self.p.open(
-            format=self.sample_format,
-            channels=self.channels,
-            rate=self.rate,
-            input=True,
-            frames_per_buffer=self.chunk,
-        )
+        self.stream = None
         print("Audio recorder initialized.")
 
-    def record_audio_continuous(self, input_pin=4, filename="output.wav", post_record_buffer=1.5):
-        frames = []
-        print("Recording...")
+    def start_stream(self):
+        """Open the audio stream and keep it ready."""
+        if self.stream is None:
+            self.stream = self.p.open(
+                format=self.sample_format,
+                channels=self.channels,
+                rate=self.rate,
+                input=True,
+                frames_per_buffer=self.chunk,
+            )
+            print("Audio stream opened.")
 
-        # Record while the GPIO input pin is HIGH
+    def stop_stream(self):
+        """Stop and close the audio stream."""
+        if self.stream is not None:
+            self.stream.stop_stream()
+            self.stream.close()
+            self.stream = None
+            print("Audio stream closed.")
+
+    def record_audio_continuous(self, input_pin, filename="output.wav", post_record_buffer=1.5):
+        """
+        Records audio while the GPIO input pin is HIGH and for a post-record buffer after it goes LOW.
+        """
+        self.start_stream()   
+        frames = []
+        print("Recording audio...")
+
+
+        print("GPIO is HIGH. Flushing stale audio data...")
+
+        # Flush any pre-existing buffered audio frames
+        while self.stream.get_read_available() > 0:
+            self.stream.read(self.stream.get_read_available(), exception_on_overflow=False)
+
+        print("Starting fresh recording...")
+        # Record while GPIO pin is HIGH
         while GPIO.input(input_pin) == GPIO.HIGH:
-            data = self.stream.read(self.chunk)
+            data = self.stream.read(self.chunk, exception_on_overflow=False)
             frames.append(data)
 
-        # Record additional buffer after input goes LOW
+        # Record additional audio after pin goes LOW
         end_time = time.time() + post_record_buffer
         while time.time() < end_time:
-            data = self.stream.read(self.chunk)
+            data = self.stream.read(self.chunk, exception_on_overflow=False)
             frames.append(data)
 
-        print("Recording finished.")
+        print("Recording finished. Saving to file...")
 
-        # Save audio to file
+        # Save the audio to a file
         with wave.open(filename, 'wb') as wf:
             wf.setnchannels(self.channels)
             wf.setsampwidth(self.p.get_sample_size(self.sample_format))
             wf.setframerate(self.rate)
             wf.writeframes(b''.join(frames))
 
+        print(f"Audio saved to {filename}.")
         return filename
 
     def close(self):
-        self.stream.stop_stream()
-        self.stream.close()
+        """Clean up PyAudio resources."""
+        self.stop_stream()
         self.p.terminate()
-        print("Audio recorder closed.")
+        print("Audio recorder resources released.")
 
 # Audio From URL Player
 class PersistentAudioURLPlayer:
@@ -262,6 +293,8 @@ def preprocess_text_for_tts(text):
     clean_text = clean_text.replace("•", " ")
     clean_text = clean_text.replace("-", " ")
     clean_text = clean_text.replace(" or ", ",")
+    clean_text = clean_text.replace("'", "")
+    clean_text = clean_text.replace(":", "")
     # Removes non-ASCII characters
     clean_text = clean_text.replace("°", " degrees")
     return clean_text[:1000]  # Limits to 200 characters for API compatibility
