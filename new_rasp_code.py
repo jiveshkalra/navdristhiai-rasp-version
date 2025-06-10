@@ -128,7 +128,7 @@ def call_gemini_vlm(image_path, query, client):
         types.Content(
             role="user",
             parts=[
-                types.Part.from_text(text=f"Hi NavDrishtiAI, I have attached an image of what is in front of me, based on this image answer the following question: {query}. keep it short, simple and concise(under 200 letters), talk straight to point and avoid any unnecessary details and always be willing to help me with any other questions I may have."),
+                types.Part.from_text(text=f"Hi NavDrishtiAI, I have attached an image of what is in front of me, based on this image answer the following question: {query}. keep it short, simple and concise(under 200 tokens), talk straight to point and avoid any unnecessary details and always be willing to help me with any other questions I may have."),
                 types.Part.from_bytes(data=base64.b64decode(base64_image), mime_type="image/jpeg"),
             ],
         ),
@@ -145,7 +145,7 @@ def call_gemini_vlm(image_path, query, client):
         contents=contents,
         config=generate_content_config,
     )
-    
+    print(f"Response from Gemini VLM: {response}")
     return response.text
 
 
@@ -193,7 +193,7 @@ def record_audio_continuous(filename="output.wav"):
         frames.append(data)
 
     # Add a 5-second buffer after input goes low
-    end_time = time.time() + 1.5
+    end_time = time.time() + 2
     while time.time() < end_time:
         data = stream.read(chunk)
         frames.append(data)
@@ -217,9 +217,7 @@ def run_whisper(filename):
         transcription = groq_client.audio.transcriptions.create(
             file=(filename, file.read()),
             model="whisper-large-v3-turbo",
-            response_format="json",
-            language="en",
-            temperature=0.0
+             response_format="verbose_json"
         )
         return transcription.text
 
