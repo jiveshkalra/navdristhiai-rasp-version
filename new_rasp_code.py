@@ -3,7 +3,8 @@ from threading import Thread
 import RPi.GPIO as GPIO
 from queue import Queue
 from io import BytesIO
-from groq import Groq
+from google import genai
+from google.genai import types
 # from gtts import gTTS
 import subprocess
 import requests
@@ -25,9 +26,9 @@ picam2 = Picamera2()
 picam2.start()
 time.sleep(1)
 
-# Initialize Groq client
-groq_api_key = "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"
-client = Groq(api_key=groq_api_key)
+# Initialize Gemini client
+gemini_api_key = "AIzaSyDbbNQwdUMWSZ-FQISlFhLQ1YXO5V50AVA"
+client = genai.Client(api_key=gemini_api_key)
 
 # Function definitions
 
@@ -115,26 +116,33 @@ def take_pic():
     return image_path 
 
 
-def call_groq_vlm(image_path, query, client):
+def call_gemini_vlm(image_path, query, client):
     base64_image = encode_image(image_path)
-    completion = client.chat.completions.create(
-        model="llama-3.2-11b-vision-preview",
-        messages=[
-            {"role": "assistant", "content": "Hi I am NavDrishtiAI, your personal visual image assistant , you can provide me image of your surroundings and I will give you concise descriptions or answer your questions based on that image."},
-            {"role": "user", "content": [
-                {"type": "text",
-                 "text": f"Hi NavDrishtiAI, I have attached an image of what is in front of me, based on this image answer the following question: {query}. keep it short , simple and concise(under 200 letters), talk straight to point and avoid any unnecessary details and always be willing to help me with any other questions I may have."},
-                {"type": "image_url", 
-                 "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]},
-            {"role": "assistant", "content": "Sure I'll be glad to help in anyway I can. Based on the image provided here is a brief answer to your query, "}
-        ],
-        temperature=1,
-        max_tokens=125,
-        top_p=1,
-        stream=False,
-        stop=None,
+    
+    model = "gemini-2.5-flash-preview-05-20"
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part.from_text(text=f"Hi NavDrishtiAI, I have attached an image of what is in front of me, based on this image answer the following question: {query}. keep it short, simple and concise(under 200 letters), talk straight to point and avoid any unnecessary details and always be willing to help me with any other questions I may have."),
+                types.Part.from_bytes(data=base64.b64decode(base64_image), mime_type="image/jpeg"),
+            ],
+        ),
+    ]
+    
+    generate_content_config = types.GenerateContentConfig(
+        response_mime_type="text/plain",
+        max_output_tokens=125,
+        temperature=1.0,
     )
-    return completion.choices[0].message.content
+    
+    response = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=generate_content_config,
+    )
+    
+    return response.text
 
 
 def play_audio(audio_path):
@@ -283,7 +291,7 @@ def do_complete_run(client):
 
     # Step 4: Call VLM with the image and transcription
     start_time = time.time()
-    vlm_response = call_groq_vlm(image_path, transcription_text, client)
+    vlm_response = call_gemini_vlm(image_path, transcription_text, client)
     end_time = time.time()
     print(f"VLM Response received in {end_time - start_time:.2f} seconds.")
     print(f"VLM Response: {vlm_response}")
