@@ -5,6 +5,7 @@ from queue import Queue
 from io import BytesIO
 from google import genai
 from google.genai import types
+from groq import Groq
 # from gtts import gTTS
 import subprocess
 import requests
@@ -26,9 +27,12 @@ picam2 = Picamera2()
 picam2.start()
 time.sleep(1)
 
-# Initialize Gemini client
+# Initialize both clients
 gemini_api_key = "AIzaSyDbbNQwdUMWSZ-FQISlFhLQ1YXO5V50AVA"
-client = genai.Client(api_key=gemini_api_key)
+groq_api_key = "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"  # Add your Groq API key here
+
+gemini_client = genai.Client(api_key=gemini_api_key)
+groq_client = Groq(api_key=groq_api_key)
 
 # Function definitions
 
@@ -210,7 +214,7 @@ def record_audio_continuous(filename="output.wav"):
 
 def run_whisper(filename):
     with open(filename, "rb") as file:
-        transcription = client.audio.transcriptions.create(
+        transcription = groq_client.audio.transcriptions.create(
             file=(filename, file.read()),
             model="whisper-large-v3-turbo",
             response_format="json",
@@ -265,7 +269,7 @@ def preprocess_text_for_tts(text):
     return clean_text[:1000]  # Limits to 200 characters for API compatibility
 
 
-def do_complete_run(client):
+def do_complete_run(groq_client, gemini_client):
     # Record start time for the entire process
     total_start_time = time.time()
 
@@ -291,7 +295,7 @@ def do_complete_run(client):
 
     # Step 4: Call VLM with the image and transcription
     start_time = time.time()
-    vlm_response = call_gemini_vlm(image_path, transcription_text, client)
+    vlm_response = call_gemini_vlm(image_path, transcription_text, gemini_client)
     end_time = time.time()
     print(f"VLM Response received in {end_time - start_time:.2f} seconds.")
     print(f"VLM Response: {vlm_response}")
@@ -344,7 +348,7 @@ try:
         if GPIO.input(input_pin) == GPIO.HIGH:
             play_listening()
 
-            do_complete_run(client)
+            do_complete_run(groq_client, gemini_client)
         time.sleep(0.5)  # Small delay to reduce CPU usage
 finally:
     GPIO.cleanup()
