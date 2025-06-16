@@ -2,7 +2,7 @@ import time
 import wave
 import pyaudio
 import requests
-# from picamera2 import Picamera2
+from picamera2 import Picamera2
 
 def record_audio(filename="test_audio.wav", record_seconds=5):
     chunk = 1024
@@ -28,20 +28,20 @@ def record_audio(filename="test_audio.wav", record_seconds=5):
 
 def main():
     # 1. Capture image
-    # picam2 = Picamera2()
-    # picam2.start()
-    # img_file = "test2.jpg"
-    # picam2.capture_file(img_file)
-    # print(f"Saved image to {img_file}")
+    picam2 = Picamera2()
+    picam2.start()
+    img_file = "test2.jpg"
+    picam2.capture_file(img_file)
+    print(f"Saved image to {img_file}")
 
     # 2. Record audio
     audio_file = record_audio()
 
     # 3. Upload image
     base_url = 'https://herring-notable-physically.ngrok-free.app'
-    # resp_img = requests.post(f"{base_url}/upload_image",
-    #                          files={'image': open(img_file, 'rb')})
-    # print("Image upload response:", resp_img.text)
+    resp_img = requests.post(f"{base_url}/upload_image",
+                             files={'image': open(img_file, 'rb')})
+    print("Image upload response:", resp_img.text)
 
     # 4. Upload audio
     resp_aud = requests.post(f"{base_url}/upload_audio",
