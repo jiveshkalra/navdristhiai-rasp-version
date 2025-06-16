@@ -16,13 +16,23 @@ app = Flask(__name__)
 @app.route('/upload_image', methods=['POST'])
 def upload_image():
     image = request.files['image']
+    os.makedirs('uploads', exist_ok=True)
     image.save(f'uploads/{image.filename}')
     return jsonify({'message': 'Image uploaded successfully'})
+
+@app.route('/upload_audio', methods=['POST'])
+def upload_audio():
+    audio = request.files['audio']
+    os.makedirs('uploads', exist_ok=True)
+    audio.save(f'uploads/{audio.filename}')
+    return jsonify({'message': 'Audio uploaded successfully'})
+
 def start_ngrok(port):
-    subprocess.Popen(['ngrok', 'http', f'--domain=herring-notable-physically.ngrok-free.app' ,str(port)])
+    subprocess.Popen(['ngrok', 'http', f'--domain=herring-notable-physically.ngrok-free.app', str(port)])
+
 
 if __name__ == '__main__':
-    port = 5000
-    start_ngrok(5000)
+    port = 5003
+    start_ngrok(5003)
     app.run(debug=True, port=port)
 
