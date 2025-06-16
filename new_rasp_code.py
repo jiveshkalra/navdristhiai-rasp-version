@@ -31,7 +31,7 @@ time.sleep(1)
 
 # Initialize both clients
 gemini_api_key = "AIzaSyDbbNQwdUMWSZ-FQISlFhLQ1YXO5V50AVA"
-groq_api_key = "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"  # Add your Groq API key here
+groq_api_key = "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"  # Add your Groq API key here
 
 gemini_client = genai.Client(api_key=gemini_api_key)
 groq_client = Groq(api_key=groq_api_key)
