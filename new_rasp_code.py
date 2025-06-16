@@ -7,8 +7,7 @@ from pathlib import Path
 
 from google import genai
 from google.genai import types
-from groq import Groq
-import json
+from groq import Groq 
 # from gtts import gTTS
 import subprocess
 import requests
@@ -215,15 +214,17 @@ def record_audio_continuous(filename="output.wav"):
     return filename
 
 
-def run_whisper(filename): 
+
+def run_whisper(filename):
     with open(filename, "rb") as file:
-        # Create a transcription of the audio file
         transcription = groq_client.audio.transcriptions.create(
-        file=Path(filename), # Required audio file
-        model="whisper-large-v3-turbo", # Required model to use for transcription 
-        response_format="verbose_json",  # Optional  
-        ) 
-        return transcription.text  # Return the transcription text
+            file=(filename, file.read()),
+            model="whisper-large-v3-turbo",
+            response_format="json",
+            language="en",
+            temperature=0.0
+        )
+        return transcription.text
 
 # TTS function to fetch audio from RapidAPI
 
