@@ -3,6 +3,8 @@ from threading import Thread
 import RPi.GPIO as GPIO
 from queue import Queue
 from io import BytesIO
+from pathlib import Path
+
 from google import genai
 from google.genai import types
 from groq import Groq
@@ -217,7 +219,7 @@ def run_whisper(filename):
     with open(filename, "rb") as file:
         # Create a transcription of the audio file
         transcription = groq_client.audio.transcriptions.create(
-        file=filename, # Required audio file
+        file=Path(filename), # Required audio file
         model="whisper-large-v3-turbo", # Required model to use for transcription 
         response_format="verbose_json",  # Optional  
         ) 
