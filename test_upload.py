@@ -38,7 +38,7 @@ def main():
     audio_file = record_audio()
 
     # 3. Upload image
-    # base_url = 'https://herring-notable-physically.ngrok-free.app'
+    base_url = 'https://herring-notable-physically.ngrok-free.app'
     # resp_img = requests.post(f"{base_url}/upload_image",
     #                          files={'image': open(img_file, 'rb')})
     # print("Image upload response:", resp_img.text)
