@@ -28,7 +28,7 @@ load_dotenv()
 
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 groq_api_key = os.getenv("GROQ_API_KEY")
-image_server_url = os.getenv("IMAGE_SERVER_URL", "http://127.0.0.1:5001/latest.jpg")
+image_server_url = os.getenv("IMAGE_SERVER_URL", "http://192.168.93.239:5001/latest.jpg")
 
 gemini_client = genai.Client(api_key=gemini_api_key)
 groq_client = Groq(api_key=groq_api_key)

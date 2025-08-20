@@ -132,8 +132,8 @@ class CameraWorker:
 
 # Configuration via environment variables
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
-FRAME_WIDTH = int(os.getenv("FRAME_WIDTH", "1280"))
-FRAME_HEIGHT = int(os.getenv("FRAME_HEIGHT", "720"))
+FRAME_WIDTH = int(os.getenv("FRAME_WIDTH", "1920"))
+FRAME_HEIGHT = int(os.getenv("FRAME_HEIGHT", "1080"))
 FRAME_FPS = int(os.getenv("FRAME_FPS", "10"))
 JPEG_QUALITY = int(os.getenv("JPEG_QUALITY", "85"))
 
