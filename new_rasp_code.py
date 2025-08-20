@@ -18,6 +18,7 @@ import wave
 from PIL import Image
 import os
 import re
+from dotenv import load_dotenv
 
 # Set up GPIO
 GPIO.setmode(GPIO.BCM)
@@ -28,16 +29,16 @@ GPIO.setup(input_pin, GPIO.IN)
 picam2 = Picamera2()
 picam2.start()
 time.sleep(1)
+  # Add your Groq API key here
+load_dotenv()
 
-# Initialize both clients
-gemini_api_key = "AIzaSyDbbNQwdUMWSZ-FQISlFhLQ1YXO5V50AVA"
-groq_api_key = "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"  # Add your Groq API key here
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+groq_api_key = os.getenv("GROQ_API_KEY")
 
 gemini_client = genai.Client(api_key=gemini_api_key)
 groq_client = Groq(api_key=groq_api_key)
 
 # Function definitions
-
 
 def stream_and_play_audio_optimized(url):
     chunk_size = 64 * 1024  # Smaller chunks for low bandwidth
@@ -125,7 +126,7 @@ def take_pic():
 def call_gemini_vlm(image_path, query, client):
     base64_image = encode_image(image_path)
     
-    model = "gemini-2.0-flash"
+    model = "gemini-2.5-flash"
     contents = [
         types.Content(
             role="user",
