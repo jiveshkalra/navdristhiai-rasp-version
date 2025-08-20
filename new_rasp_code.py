@@ -344,12 +344,37 @@ def fetch_tts_audio(text, filename, to_download=False):
 
 
 def preprocess_text_for_tts(text):
-    # Remove non-ASCII characters and limit length
-    # Removes non-ASCII characters
-    clean_text = re.sub(r'[^\x00-\x7F]+', ' ', text)
-    # Removes non-ASCII characters
-    clean_text = clean_text.replace("°", " degrees")
-    return clean_text[:1000]  # Limits to 200 characters for API compatibility
+    """Clean and limit text for TTS API compatibility - matches server logic."""
+    # Replace problematic characters that cause URL encoding issues
+    clean_text = text.replace('°', ' degrees')
+    clean_text = clean_text.replace('&', ' and ')
+    clean_text = clean_text.replace('%', ' percent')
+    clean_text = clean_text.replace('#', ' number ')
+    clean_text = clean_text.replace('+', ' plus ')
+    
+    # Remove or replace other special characters
+    clean_text = re.sub(r'[^a-zA-Z0-9\s.,!?;:\-\']', ' ', clean_text)
+    
+    # Normalize whitespace
+    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+    
+    # Split long text into smaller chunks
+    max_length = 500
+    if len(clean_text) > max_length:
+        # Try to break at sentence boundaries
+        sentences = re.split(r'[.!?]+', clean_text)
+        result = ""
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(result + sentence) <= max_length:
+                result += sentence + ". "
+            else:
+                break
+        clean_text = result.strip()
+        if not clean_text:
+            clean_text = text[:max_length] + "..."
+    
+    return clean_text
 
 
 def do_complete_run(groq_client, gemini_client):

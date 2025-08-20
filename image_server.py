@@ -176,7 +176,7 @@ def latest_jpg():
 
 # -------------------- TTS (Speak) Endpoint --------------------
 # Configure via environment variables
-TTS_RAPIDAPI_KEY = os.getenv("TTS_RAPIDAPI_KEY")  # required
+TTS_RAPIDAPI_KEY = os.getenv("TTS_RAPIDAPI_KEY","003d07f7a3msh14a688b8db48422p1d893cjsne4055fd63ac2")  # required
 TTS_RAPIDAPI_HOST = os.getenv(
 	"TTS_RAPIDAPI_HOST", "text-to-speech-ai-tts-api.p.rapidapi.com"
 )
@@ -184,14 +184,53 @@ TTS_LANGUAGE_DEFAULT = os.getenv("TTS_LANGUAGE", "en-IN")
 TTS_VOICE_DEFAULT = os.getenv("TTS_VOICE", "en-IN-NeerjaNeural")
 
 
+def _preprocess_tts_text(text: str) -> str:
+	"""Clean and limit text for TTS API compatibility."""
+	import re
+	# Replace problematic characters that cause URL encoding issues
+	clean_text = text.replace('°', ' degrees')
+	clean_text = clean_text.replace('&', ' and ')
+	clean_text = clean_text.replace('%', ' percent')
+	clean_text = clean_text.replace('#', ' number ')
+	clean_text = clean_text.replace('+', ' plus ')
+	
+	# Remove or replace other special characters
+	clean_text = re.sub(r'[^a-zA-Z0-9\s.,!?;:\-\']', ' ', clean_text)
+	
+	# Normalize whitespace
+	clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+	
+	# Split long text into smaller chunks (TTS APIs often have limits)
+	max_length = 500  # Conservative limit
+	if len(clean_text) > max_length:
+		# Try to break at sentence boundaries
+		sentences = re.split(r'[.!?]+', clean_text)
+		result = ""
+		for sentence in sentences:
+			sentence = sentence.strip()
+			if len(result + sentence) <= max_length:
+				result += sentence + ". "
+			else:
+				break
+		clean_text = result.strip()
+		if not clean_text:
+			clean_text = text[:max_length] + "..."
+	
+	return clean_text
+
+
 def _tts_generate_download_url(text: str, language: str, voice: str) -> str:
 	if not TTS_RAPIDAPI_KEY:
 		raise RuntimeError(
 			"Missing TTS_RAPIDAPI_KEY env var for RapidAPI Text-to-Speech service"
 		)
+	
+	# Preprocess text to avoid API issues
+	clean_text = _preprocess_tts_text(text)
+	
 	url = f"https://{TTS_RAPIDAPI_HOST}/"
 	params = {
-		"text": text,
+		"text": clean_text,
 		"language": language,
 		"voice": voice,
 	}
