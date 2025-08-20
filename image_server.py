@@ -4,7 +4,10 @@ import time
 import threading
 from typing import Optional, Tuple
 
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
+import subprocess
+import tempfile
+import requests
 
 try:
 	import cv2
@@ -169,6 +172,118 @@ def latest_jpg():
 	if jpeg is None:
 		return jsonify({"error": "No frame available yet"}), 503
 	return Response(jpeg, mimetype="image/jpeg")
+
+
+# -------------------- TTS (Speak) Endpoint --------------------
+# Configure via environment variables
+TTS_RAPIDAPI_KEY = os.getenv("TTS_RAPIDAPI_KEY")  # required
+TTS_RAPIDAPI_HOST = os.getenv(
+	"TTS_RAPIDAPI_HOST", "text-to-speech-ai-tts-api.p.rapidapi.com"
+)
+TTS_LANGUAGE_DEFAULT = os.getenv("TTS_LANGUAGE", "en-IN")
+TTS_VOICE_DEFAULT = os.getenv("TTS_VOICE", "en-IN-NeerjaNeural")
+
+
+def _tts_generate_download_url(text: str, language: str, voice: str) -> str:
+	if not TTS_RAPIDAPI_KEY:
+		raise RuntimeError(
+			"Missing TTS_RAPIDAPI_KEY env var for RapidAPI Text-to-Speech service"
+		)
+	url = f"https://{TTS_RAPIDAPI_HOST}/"
+	params = {
+		"text": text,
+		"language": language,
+		"voice": voice,
+	}
+	headers = {
+		"x-rapidapi-key": TTS_RAPIDAPI_KEY,
+		"x-rapidapi-host": TTS_RAPIDAPI_HOST,
+	}
+	resp = requests.get(url, headers=headers, params=params, timeout=30)
+	resp.raise_for_status()
+	data = resp.json()
+	# API sometimes returns error as string "false"; handle both
+	err = data.get("error")
+	if err not in (False, "false", None):
+		raise RuntimeError(f"TTS error: {data}")
+	download_url = data.get("download_url")
+	if not download_url:
+		raise RuntimeError("No download_url in TTS response")
+	return download_url
+
+
+def _play_audio_file(path: str, blocking: bool = False) -> None:
+	# Prefer afplay on macOS
+	cmd = ["afplay", path]
+	try:
+		if blocking:
+			subprocess.run(cmd, check=False)
+		else:
+			subprocess.Popen(cmd)
+	except FileNotFoundError:
+		# Fallback to ffplay if available
+		ff_cmd = [
+			"ffplay",
+			"-nodisp",
+			"-autoexit",
+			"-loglevel",
+			"error",
+			path,
+		]
+		if blocking:
+			subprocess.run(ff_cmd, check=False)
+		else:
+			subprocess.Popen(ff_cmd)
+
+
+def _download_to_tempfile(url: str) -> str:
+	r = requests.get(url, timeout=60)
+	r.raise_for_status()
+	with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+		f.write(r.content)
+		return f.name
+
+
+@app.post("/speak")
+def speak():
+	"""Synthesize speech on the server and play it locally.
+
+	JSON body:
+	{
+	  "text": "...",              # required
+	  "language": "en-IN",         # optional
+	  "voice": "en-IN-NeerjaNeural", # optional
+	  "blocking": false,            # optional; if true, wait until playback finishes
+	  "return_url": false           # optional; if true, return the audio URL instead of playing
+	}
+	"""
+	try:
+		data = request.get_json(force=True, silent=False) or {}
+		text = (data.get("text") or "").strip()
+		if not text:
+			return jsonify({"error": "Missing 'text'"}), 400
+
+		language = (data.get("language") or TTS_LANGUAGE_DEFAULT).strip()
+		voice = (data.get("voice") or TTS_VOICE_DEFAULT).strip()
+		blocking = bool(data.get("blocking", False))
+		return_url = bool(data.get("return_url", False))
+
+		dl_url = _tts_generate_download_url(text, language, voice)
+
+		if return_url:
+			return jsonify({"ok": True, "download_url": dl_url})
+
+		# Download and play locally
+		path = _download_to_tempfile(dl_url)
+		if blocking:
+			_play_audio_file(path, blocking=True)
+			return jsonify({"ok": True, "played": True, "blocking": True})
+		else:
+			# Fire-and-forget playback
+			threading.Thread(target=_play_audio_file, args=(path, False), daemon=True).start()
+			return jsonify({"ok": True, "played": True, "blocking": False})
+	except Exception as e:
+		return jsonify({"error": str(e)}), 500
 
 
 def main():

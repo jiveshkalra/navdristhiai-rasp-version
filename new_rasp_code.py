@@ -17,6 +17,7 @@ import wave
 import os
 import re
 from dotenv import load_dotenv
+from urllib.parse import urlparse, urlunparse
 
 # Set up GPIO
 GPIO.setmode(GPIO.BCM)
@@ -29,6 +30,15 @@ load_dotenv()
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 groq_api_key = os.getenv("GROQ_API_KEY")
 image_server_url = os.getenv("IMAGE_SERVER_URL", "http://192.168.93.239:5001/latest.jpg")
+speak_server_url = os.getenv("SPEAK_SERVER_URL")
+
+# Derive speak server URL from image_server_url if not provided
+if not speak_server_url:
+    try:
+        parsed = urlparse(image_server_url)
+        speak_server_url = urlunparse((parsed.scheme, parsed.netloc, "/speak", "", "", ""))
+    except Exception:
+        speak_server_url = "http://127.0.0.1:5001/speak"
 
 gemini_client = genai.Client(api_key=gemini_api_key)
 groq_client = Groq(api_key=groq_api_key)
@@ -210,26 +220,43 @@ def play_audio(audio_path):
 # Function to ensure an intro message file exists and plays it
 
 
+def send_tts_to_server(text: str, blocking: bool = False, language: str = "en-IN", voice: str = "en-IN-NeerjaNeural") -> bool:
+    try:
+        payload = {
+            "text": text,
+            "language": language,
+            "voice": voice,
+            "blocking": blocking,
+        }
+        r = requests.post(speak_server_url, json=payload, timeout=15)
+        if r.status_code == 200 and r.json().get("ok"):
+            return True
+        else:
+            print(f"speak server response error: {r.status_code} {r.text}")
+            return False
+    except Exception as e:
+        print(f"Failed to call speak server at {speak_server_url}: {e}")
+        return False
+
+
 def play_intro():
-    intro_file = "intro.mp3"
-    if not os.path.exists(intro_file):
-        print("Intro file does not exist, generating TTS audio.")
-        intro_text = "Hi, I am NavDrishtiAI, here to assist you with all your visual needs!"
+    # Prefer server-side speech on the Mac
+    intro_text = "Hi, I’m NavDrishtiAI. I help people with low vision understand their surroundings and navigate safely. How can I help you right now?"
+    if not send_tts_to_server(intro_text, blocking=False):
+        # Fallback to local generation and playback
+        intro_file = "intro.mp3"
         fetch_tts_audio(intro_text, intro_file, to_download=True)
-    else:
-        print("Intro file already exists.")
-    play_audio(intro_file)
+        play_audio(intro_file)
 
 # Function to ensure a listening message file exists
 
 
 def play_listening():
-    listening_file = "listening.mp3"
-    if not os.path.exists(listening_file):
-        print("Listening file does not exist, generating TTS audio.")
-        listening_text = "Listening..."
+    listening_text = "Listening…"
+    if not send_tts_to_server(listening_text, blocking=False):
+        listening_file = "listening.mp3"
         fetch_tts_audio(listening_text, listening_file, to_download=True)
-    play_audio(listening_file)
+        play_audio(listening_file)
 
 
 def record_audio_continuous(filename="output.wav"):
@@ -289,9 +316,12 @@ def fetch_tts_audio(text, filename, to_download=False):
         "language": "en-IN",
         "voice": "en-IN-NeerjaNeural"
     }
+    api_key = os.getenv("TTS_RAPIDAPI_KEY")
+    if not api_key:
+        print("Missing TTS_RAPIDAPI_KEY for local fallback TTS.")
+        return None
     headers = {
-        # Replace with your RapidAPI key
-        "x-rapidapi-key": "003d07f7a3msh14a688b8db48422p1d893cjsne4055fd63ac2",
+        "x-rapidapi-key": api_key,
         "x-rapidapi-host": "text-to-speech-ai-tts-api.p.rapidapi.com"
     }
     response = requests.get(url, headers=headers, params=querystring)
@@ -363,21 +393,19 @@ def do_complete_run(groq_client, gemini_client):
     print(
         f"TTS text preprocessing completed in {end_time - start_time:.2f} seconds.")
 
-    # Step 6: Fetch TTS audio from RapidAPI
+    # Step 6: Ask the image server (Mac) to speak the text directly
     start_time = time.time()
-    tts_audio_url = fetch_tts_audio(
-        tts_text, 'vlm_response.mp3', to_download=False)
+    spoke = send_tts_to_server(tts_text, blocking=False)
     end_time = time.time()
-    print(f"TTS audio fetch completed in {end_time - start_time:.2f} seconds.")
+    print(f"Remote TTS request completed in {end_time - start_time:.2f} seconds.")
 
-    if tts_audio_url:
-        # Step 7: Stream and play the TTS audio
-        start_time = time.time()
-        stream_and_play_audio_optimized(tts_audio_url)
-        end_time = time.time()
-        print(f"TTS audio played in {end_time - start_time:.2f} seconds.")
-    else:
-        print("Failed to fetch or play TTS audio.")
+    if not spoke:
+        print("Remote TTS failed, falling back to local streaming.")
+        tts_audio_url = fetch_tts_audio(tts_text, 'vlm_response.mp3', to_download=False)
+        if tts_audio_url:
+            stream_and_play_audio_optimized(tts_audio_url)
+        else:
+            print("Failed to fetch or play TTS audio locally as well.")
 
     # Final print of total time taken
     total_end_time = time.time()
