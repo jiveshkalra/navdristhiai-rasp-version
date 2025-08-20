@@ -1,4 +1,3 @@
-from picamera2 import Picamera2
 from threading import Thread
 import RPi.GPIO as GPIO
 from queue import Queue
@@ -15,7 +14,6 @@ import pyaudio
 import base64
 import time
 import wave
-from PIL import Image
 import os
 import re
 from dotenv import load_dotenv
@@ -25,15 +23,12 @@ GPIO.setmode(GPIO.BCM)
 input_pin = 4
 GPIO.setup(input_pin, GPIO.IN)
 
-# Initialize Camera
-picam2 = Picamera2()
-picam2.start()
-time.sleep(1)
   # Add your Groq API key here
 load_dotenv()
 
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 groq_api_key = os.getenv("GROQ_API_KEY")
+image_server_url = os.getenv("IMAGE_SERVER_URL", "http://127.0.0.1:5001/latest.jpg")
 
 gemini_client = genai.Client(api_key=gemini_api_key)
 groq_client = Groq(api_key=groq_api_key)
@@ -110,17 +105,40 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode('utf-8')
 
 
-def take_pic():
-    timestamp = int(time.time())
-    image_path = f'pics/{str(timestamp)}.jpg'
-    picam2.capture_file(f'pics/{str(timestamp)}.jpg')
-    
-    # Rotate the captured image by 180°
-    with Image.open(image_path) as img:
-        rotated_image = img.rotate(180)
-        rotated_image.save(image_path)
+def ensure_dir(path: str):
+    os.makedirs(path, exist_ok=True)
 
-    return image_path 
+
+def take_pic():
+    """Fetch the latest image from the laptop image server and save it under pics/.
+
+    The server URL must be reachable from the Raspberry Pi. Configure via env var IMAGE_SERVER_URL,
+    e.g. export IMAGE_SERVER_URL="http://<your-mac-ip>:5001/latest.jpg".
+    """
+    pics_dir = 'pics'
+    ensure_dir(pics_dir)
+    timestamp = int(time.time())
+    image_path = os.path.join(pics_dir, f"{timestamp}.jpg")
+
+    # Retry a few times in case the server hasn't produced a frame yet
+    attempts = 5
+    backoff = 0.5
+    last_err = None
+    for i in range(attempts):
+        try:
+            resp = requests.get(image_server_url, timeout=5)
+            if resp.status_code == 200 and resp.headers.get('Content-Type', '').startswith('image/'):
+                with open(image_path, 'wb') as f:
+                    f.write(resp.content)
+                return image_path
+            else:
+                last_err = f"Unexpected response {resp.status_code} {resp.headers.get('Content-Type')}"
+        except Exception as e:
+            last_err = str(e)
+        time.sleep(backoff)
+        backoff *= 1.5
+
+    raise RuntimeError(f"Failed to fetch image from server at {image_server_url}: {last_err}")
 
 
 def call_gemini_vlm(image_path, query, client):
