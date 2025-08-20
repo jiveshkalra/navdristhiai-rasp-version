@@ -126,7 +126,7 @@ def take_pic():
 def call_gemini_vlm(image_path, query, client):
     base64_image = encode_image(image_path)
     
-    model = "gemini-2.5-flash"
+    model = "gemini-2.0-flash"
     contents = [
         types.Content(
             role="user",
