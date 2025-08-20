@@ -316,12 +316,9 @@ def fetch_tts_audio(text, filename, to_download=False):
         "language": "en-IN",
         "voice": "en-IN-NeerjaNeural"
     }
-    api_key = os.getenv("TTS_RAPIDAPI_KEY")
-    if not api_key:
-        print("Missing TTS_RAPIDAPI_KEY for local fallback TTS.")
-        return None
     headers = {
-        "x-rapidapi-key": api_key,
+        # Replace with your RapidAPI key
+        "x-rapidapi-key": "003d07f7a3msh14a688b8db48422p1d893cjsne4055fd63ac2",
         "x-rapidapi-host": "text-to-speech-ai-tts-api.p.rapidapi.com"
     }
     response = requests.get(url, headers=headers, params=querystring)
